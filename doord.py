@@ -1,7 +1,7 @@
 #!/usr/bin/python3
-# doord 
-# conects to a local civi instance so that an internet outage 
-# won't prevent anyone from entering. Using sql calls wherever 
+# doord
+# connects to a local civi instance so that an internet outage
+# won't prevent anyone from entering. Using sql calls wherever
 # possible for speed.
 
 import sys,os
@@ -12,8 +12,8 @@ import configparser
 import json
 import time
 import arpreq
-from flask import Flask, request, url_for, abort 
-from pythoncivicrm import CiviCRM 
+from flask import Flask, request, url_for, abort
+from pythoncivicrm import CiviCRM
 from pythoncivicrm import CivicrmError
 import urllib3.contrib.pyopenssl
 urllib3.contrib.pyopenssl.inject_into_urllib3()
@@ -107,8 +107,8 @@ def ap_success(dev,cmd):
       f.close()
    except:
       debug_message(log_level,0, "non-existant access control device /dev/%s" % str(dev))
-     
-   
+
+
 
 '''
     Retreive user's memeber status. Returns bool
@@ -165,7 +165,7 @@ def card_lookup (card_number, **access_point):
       #print('contact id is %s' % contact_id)
       cur.execute("SELECT * FROM civicrm_contact WHERE id = %s", (contact_id,))
       contact = cur.fetchone()
-   #   print(json.dumps(contact))
+      #print(json.dumps(contact))
       member_status = membership_check(contact_id)
       print('member status is %s' % member_status)
       display_name= contact['display_name']
@@ -206,18 +206,18 @@ def card_lookup (card_number, **access_point):
 
 def acl_check(entity,iD,**access_point):
    # returns bool. this is where we check permissions
-   # order is useracl for AP, useracl for parent APs,   
-   # groupacls for AP, groupacls for parent APs. 
-   aco_record = {}   
+   # order is useracl for AP, useracl for parent APs,
+   # groupacls for AP, groupacls for parent APs.
+   aco_record = {}
 
    if entity == "UserAcls":
-      search_param = 'contact_id'    
-      search_table = 'civicrm_mstk_user_acls'    
+      search_param = 'contact_id'
+      search_table = 'civicrm_mstk_user_acls'
    elif entity == "GroupAcls":
       search_param = "group_id"
-      search_table = "civicrm_mstk_group_acls"    
+      search_table = "civicrm_mstk_group_acls"
    print('in acl_check, ap is %s, iD is %s and entity is %s' % (access_point['id'],iD,entity))
-   select_query ="""SELECT * FROM  %s WHERE aco = %s AND %s = %%s;""" % (search_table,access_point['id'], search_param) 
+   select_query ="""SELECT * FROM  %s WHERE aco = %s AND %s = %%s;""" % (search_table,access_point['id'], search_param)
    if cur.execute(select_query,(iD,)):
       aco_record = cur.fetchone()
       #print('aco record is %s' % aco_record)
@@ -228,13 +228,13 @@ def acl_check(entity,iD,**access_point):
       elif int(aco_record['status_id']) == 1:
          print('direct acl found and active')
          return 1
-         
+
    else:
-      print("no direct %s" % entity ) 
+      print("no direct %s" % entity )
       pass
 
-   # no match yet, let's see if the ap has a parent where an acl exists. 
-   
+   # no match yet, let's see if the ap has a parent where an acl exists.
+
    ap_parent_id = access_point['parent_id']
    print('ap_parent_id is %s' % ap_parent_id)
    if ap_parent_id:
@@ -246,14 +246,14 @@ def acl_check(entity,iD,**access_point):
       if str(access) == "1":
         return 1
    else:
-      print("no parent aps for aco %s"  % access_point) 
+      print("no parent aps for aco %s"  % access_point)
       pass
-     
+
    print('access point should not be parent, it is %s' % access_point)
 
    # no match yet, let's move on to groupacls. First find what groups user belongs to.
    # there's no way to directly find smart group membership. so we're getting all groups
-   # with Contact api  
+   # with Contact api
 
    if entity == "UserAcls":
       search_dict = {
@@ -262,11 +262,11 @@ def acl_check(entity,iD,**access_point):
       }
       try:
          search_results = civicrm.get("Contact", **search_dict)
-         print(json.dumps(search_results))         
+         print(json.dumps(search_results))
          groups_string = search_results[0]['groups']
          groups = groups_string.split(",")
-         # ouch, to give precedence to child groups we have to figure our relationships first. 
-         # get the whole list of gids, order the list and process.  
+         # ouch, to give precedence to child groups we have to figure our relationships first.
+         # get the whole list of gids, order the list and process.
          for group_title in groups:
             print('group title is %s' % group_title)
             cur.execute("SELECT * FROM civicrm_group  WHERE title = %s", (group_title,))
@@ -278,7 +278,7 @@ def acl_check(entity,iD,**access_point):
                print('group acl is good')
                return 1
             else:
-               
+
                # check for parent group
                if cur.execute("SELECT * FROM civicrm_group_nesting  WHERE child_group_id = %s", (gid,)):
                   parent_search = cur.fetchone()
@@ -286,7 +286,7 @@ def acl_check(entity,iD,**access_point):
                   # more recursion
                   access = acl_check("GroupAcls",parent_search['parent_group_id'],**access_point)
                   if str(access) == "1":
-                     print('civi parent group %s match with ap %s' % (parent_search['parent_group_id'],access_point['id'])) 
+                     print('civi parent group %s match with ap %s' % (parent_search['parent_group_id'],access_point['id']))
                      return 1
                else:
                   print('no parent groups found')
@@ -298,7 +298,7 @@ def acl_check(entity,iD,**access_point):
       return 0
 
 '''
-ap_lookup returns a dictionary of ap info appending an error code.  
+ap_lookup returns a dictionary of ap info appending an error code.
 this authenticates the user as well as the machine against the mstk
 access points in our db.
 
@@ -357,7 +357,7 @@ def ap_lookup(client_ip, context):
    else:
       debug_message(log_level, 0, "UNAUTHORIZED AP REQUEST: ip/mac don't agree. ip %s, mac %s" % (client_ip, requesting_mac))
       return {'error_code' :'x10'}
-       
+
 
 @app.route('/login', methods = ['GET', 'POST'])
 def accept_card_uid():
@@ -378,9 +378,9 @@ def accept_card_uid():
       ap_auth = ap_lookup(client_ip,context)
       #print('ap auth is %s' % ap_auth)
 
-      # doord can be terse about errors becuase doors generally don't have UIs. 
-      # And we wouldn't want to leak info about denied attempts anyway, unless it was 
-      # to say that memeber dues failed to process.  
+      # doord can be terse about errors becuase doors generally don't have UIs.
+      # And we wouldn't want to leak info about denied attempts anyway, unless it was
+      # to say that memeber dues failed to process.
       if str(ap_auth['error_code']) != 'x00':
          return str('{"access":"0"}')
 
