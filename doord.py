@@ -3,6 +3,11 @@
 # connects to a local civi instance so that an internet outage
 # won't prevent anyone from entering. Using sql calls wherever
 # possible for speed.
+#
+# IMPORTANT: adjust myqsl server config to have a sizable timeout
+# otherwise application conncition will drop.
+# wait_timeout = 604800
+# interactive_timeout = 14400
 
 import sys,os
 import re

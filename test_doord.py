@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 
 import unittest
-import doord 
+import doord
 import os
 import inspect
 import configparser
