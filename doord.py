@@ -44,7 +44,7 @@ db=database) # name of the data base
 db.autocommit(True)
 cur = db.cursor(MySQLdb.cursors.DictCursor)
 
-slack_enabled = False 
+slack_enabled = True 
 api_key_enabled = False
 
 civicrm = CiviCRM(civicrm_url, civicrm_site_key, civicrm_api_key, use_ssl=False, timeout=10 )
@@ -56,11 +56,13 @@ app.config.update(
     JSONIFY_PRETTYPRINT_REGULAR=False
 )
 
+daemon = os.path.basename(__file__).rstrip(".py")
+
 # this log is also used for slack and it's #doorbot channel
-accesslogfile = ('/var/log/%s.access.log' % os.path.basename(__file__))
+accesslogfile = ('/var/log/%s.access.log' % daemon)
 open(accesslogfile,'a').close()
 # this log is for any bs we may encounter, unauthorized APs etc
-activity_logfile = ('/var/log/%s.activity.log' % os.path.basename(__file__))
+activity_logfile = ('/var/log/%s.activity.log' % daemon) 
 open(activity_logfile, 'a').close()
 
 # relevent for ap_lookup function
@@ -83,7 +85,7 @@ def logsearch(entrydate, entryname, statuscode):
    today = time.strftime("%m/%d/%Y")
    currenttime  = time.strftime("%H:%M:%S")
    datevalue = None
-   for dates in open(accesslogfile):
+   for dates in open(accesslogfile,encoding="latin-1"):
       namevalue = None
       if entrydate in dates:
          datevalue = 1
@@ -142,7 +144,7 @@ def card_lookup (card_number, **access_point):
    if not cur.execute("SELECT * FROM civicrm_accesscard_cards WHERE card_id = %s", (card_number,)):
       today = time.strftime("%m/%d/%Y")
       currenttime  = time.strftime("%H:%M:%S")
-      logfile = open(activity_logfile, "a");
+      logfile = open(accesslogfile, "a");
       logfile.write("%s,%s,unknowncard-%s,0\n" % (str(today), str(currenttime), str(card_number)))
       logfile.close()
       debug_message(log_level,0, "unknown card id %s at accesspoint %s" % (card_number, access_point['id']))
@@ -176,6 +178,9 @@ def card_lookup (card_number, **access_point):
       print("access is %s" % access)
       if access == 1 and member_status == 1:
          logsearch(today,display_name,1)
+         logfile = open(accesslogfile, "a");
+         logfile.write("%s,%s,%s,1\n" % (str(today), str(currenttime), str(display_name)))
+         logfile.close()
          error_code = "x00"
          user_dict = {
            "display_name":str(display_name),
@@ -188,6 +193,9 @@ def card_lookup (card_number, **access_point):
          return user_dict
       else:
          logsearch(today,display_name,0)
+         logfile = open(accesslogfile, "a");
+         logfile.write("%s,%s,%s,0\n" % (str(today), str(currenttime), str(display_name)))
+         logfile.close()
          access = 0 
          error_code = "x01"
          user_dict = {
@@ -290,7 +298,7 @@ def acl_check(entity,iD,**access_point):
                      return 1
                else:
                   print('no parent groups found')
-                  return 
+                  pass
       except:
          #no direct groups
          return 0
