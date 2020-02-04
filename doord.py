@@ -87,23 +87,23 @@ def debug_message(current_log_level, message_level, message):
 
 
 def logsearch(entrydate, entryname, statuscode):
-   today = time.strftime("%m/%d/%Y")
-   currenttime  = time.strftime("%H:%M:%S")
-   datevalue = None
-   for dates in open(accesslogfile,encoding="latin-1"):
-      namevalue = None
-      if entrydate in dates:
-         datevalue = 1
-         for names in dates.splitlines():
-            if entryname in names:
-               namevalue = 1
-               #print ('the name %s is found' % entryname )
-               return
-   else:
-      if not datevalue or not namevalue:
-          loglist = [entrydate,currenttime,entryname,statuscode]
-          logline = str(loglist).replace('[','').replace(']','').replace("'","")
-          if slack_enabled:
+   if slack_enabled:
+      today = time.strftime("%m/%d/%Y")
+      currenttime  = time.strftime("%H:%M:%S")
+      datevalue = None
+      for dates in open(accesslogfile,encoding="latin-1"):
+         namevalue = None
+         if entrydate in dates:
+            datevalue = 1
+            for names in dates.splitlines():
+               if entryname in names:
+                  namevalue = 1
+                  #print ('the name %s is found' % entryname )
+                  return
+      else:
+         if not datevalue or not namevalue:
+             loglist = [entrydate,currenttime,entryname,statuscode]
+             logline = str(loglist).replace('[','').replace(']','').replace("'","")
              slack.chat.post_message('#doorbot', logline, as_user=False)
 
 
