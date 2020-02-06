@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 
 import unittest
-import doord
+import pythonmstk  
 import os
 import inspect
 import configparser
@@ -13,9 +13,10 @@ import arpreq
 import json
 
 config = configparser.ConfigParser()
-__location__ = os.path.realpath(
+secrets_file = 'doord-secrets.conf'
+secrets_path = os.path.realpath(
     os.path.join(os.getcwd(), os.path.dirname(__file__)))
-config.read(os.path.join(__location__, 'doord-secrets.conf'))
+config.read(os.path.join(secrets_path, secrets_file))
 civicrm_url = config.get('civi-connect', 'url')
 civicrm_site_key = config.get('civi-connect', 'site_key')
 civicrm_api_key = config.get('civi-connect', 'api_key')
@@ -26,7 +27,9 @@ host = ap_ip
 port = config.get('doord','port')
 ap_mac =  arpreq.arpreq(ap_ip)
 
-class TestACLs(unittest.TestCase):
+server = pythonmstk.MstkServer(secrets_path,secrets_file)
+
+class TestMstkServer(unittest.TestCase):
    
    @classmethod
    def setUpClass(cls):
@@ -44,7 +47,7 @@ class TestACLs(unittest.TestCase):
         "period_type": "rolling",
         "name": "membership_test_type"
       }
-      parent_ap_dict = {
+      cls.parent_ap_dict = {
         "ap_name":"DoorsGroup",
         "ap_short_name": "DoorGroup",
         "maintenance_mode": 0
@@ -66,9 +69,10 @@ class TestACLs(unittest.TestCase):
       cls.membership = civicrm.create('Membership', **membership_dict)
       cls.mem_id = cls.membership[0]['id']
       cls.card = civicrm.create('Cards', **{'contact_id':cls.contact_id,'card_id':'31415927'})
-      cls.parent_ap = civicrm.create('AccessPoints', **parent_ap_dict)
+      cls.parent_ap = civicrm.create('AccessPoints', **cls.parent_ap_dict)
       cls.parent_ap_id = cls.parent_ap[0]['id']
-      ap_dict = {
+      cls.parent_ap_dict.update({'id' : str(cls.parent_ap_id)})
+      cls.ap_dict = {
         "ap_name":"Test Main Door",
         "ap_short_name": "TMD",
         "ip_address": str(ap_ip),
@@ -78,8 +82,9 @@ class TestACLs(unittest.TestCase):
         "parent_id":str(cls.parent_ap_id),
         "maintenance_mode": 0
       }
-      cls.ap = civicrm.create('AccessPoints', **ap_dict,)
+      cls.ap = civicrm.create('AccessPoints', **cls.ap_dict,)
       cls.ap_id = cls.ap[0]['id']
+      cls.ap_dict.update({'id' : str(cls.ap_id)})
       print('setupClass')
       print ('membership id is %s and status is %s' % (cls.mem_id, cls.membership[0]['status_id']))
 
@@ -93,6 +98,8 @@ class TestACLs(unittest.TestCase):
       civicrm.delete('Group', cls.civi_group[0]['id'])
       civicrm.delete('Group', cls.pgid)
       civicrm.delete('Contact', cls.civi_contact[0]['id'])
+      # wow, on older civi-versions delete contact deletes group cache table
+      civicrm.group_rebuild('Job')
       print('tearDownClass')
 
    def setUp(self):
@@ -112,22 +119,24 @@ class TestACLs(unittest.TestCase):
         'status_id':'1'
       }
       self.user_acl = civicrm.create('UserAcls', **acl_dict)
+      self.assertEqual(server.acl_check("UserAcls",self.contact_id,**self.ap_dict),"1.UserAcls.1.%s" % self.ap_id)
       url = ("http://%s:%s/login" % (host,port))
       response = requests.post(url, data = {'uuid':'31415927'})
       civicrm.delete('UserAcls', self.user_acl[0]['id'])
+      self.assertEqual(server.acl_check("UserAcls",self.contact_id,**self.ap_dict),"0.UserAcls.0.%s" % self.ap_id)
       self.assertEqual(response.text,'{"access":"1"}')
       response = requests.post(url, data = {'uuid':'31415927'})
       self.assertEqual(response.text,'{"access":"0"}')
     
    def test_user_to_requested_ap_revoked(self):
       print(inspect.currentframe().f_code.co_name)
-      acl_dict = {}
       acl_dict = {
         "aco":self.ap_id,
         "contact_id":self.contact_id,
         "status_id":"3"
       }
       self.user_acl = civicrm.create('UserAcls', **acl_dict)
+      self.assertEqual(server.acl_check("UserAcls",self.contact_id,**self.ap_dict),"0.UserAcls.3.%s" % self.ap_id)
       url = ("http://%s:%s/login" % (host,port))
       response = requests.post(url, data = {'uuid':'31415927'})
       civicrm.delete('UserAcls', self.user_acl[0]['id'])
@@ -141,10 +150,12 @@ class TestACLs(unittest.TestCase):
         'status_id':'1'
       }
       self.user_acl = civicrm.create('UserAcls', **acl_dict)
+      self.assertEqual(server.acl_check("UserAcls",self.contact_id,**self.parent_ap_dict),"1.UserAcls.1.%s" % self.parent_ap_id)
       url = ("http://%s:%s/login" % (host,port))
       response = requests.post(url, data = {'uuid':'31415927'})
       civicrm.delete('UserAcls', self.user_acl[0]['id'])
       self.assertEqual(response.text,'{"access":"1"}')
+      self.assertEqual(server.acl_check("UserAcls",self.contact_id,**self.ap_dict),"0.UserAcls.0.%s" % self.ap_id)
       response = requests.post(url, data = {'uuid':'31415927'})
       self.assertEqual(response.text,'{"access":"0"}')
     
@@ -156,6 +167,7 @@ class TestACLs(unittest.TestCase):
         'status_id':'3'
       }
       self.user_acl = civicrm.create('UserAcls', **acl_dict)
+      self.assertEqual(server.acl_check("UserAcls",self.contact_id,**self.parent_ap_dict),"0.UserAcls.3.%s" % self.parent_ap_id)
       url = ("http://%s:%s/login" % (host,port))
       response = requests.post(url, data = {'uuid':'31415927'})
       civicrm.delete('UserAcls', self.user_acl[0]['id'])
@@ -170,14 +182,16 @@ class TestACLs(unittest.TestCase):
         'status_id':'1'
       }
       self.group_acl = civicrm.create('GroupAcls', **acl_dict)
+      self.assertEqual(server.acl_check("GroupAcls",self.gid,**self.ap_dict),"1.GroupAcls.1.%s" % self.ap_id)
       url = ("http://%s:%s/login" % (host,port))
       response = requests.post(url, data = {'uuid':'31415927'})
       civicrm.delete('GroupAcls', self.group_acl[0]['id'])
       self.assertEqual(response.text,'{"access":"1"}')
+      self.assertEqual(server.acl_check("UserAcls",self.contact_id,**self.ap_dict),"0.UserAcls.0.%s" % self.ap_id)
       response = requests.post(url, data = {'uuid':'31415927'})
       self.assertEqual(response.text,'{"access":"0"}')
     
-   def test_user_group_to_requested_ap_revoked_useracl(self):
+   def test_user_group_to_requested_ap_but_revoked_useracl(self):
       print(inspect.currentframe().f_code.co_name)
       group_contact = civicrm.create("GroupContact", **{"group_id":self.gid,"contact_id":self.contact_id})
       acl_dict = {
@@ -192,6 +206,7 @@ class TestACLs(unittest.TestCase):
         'status_id':'3'
       }
       self.user_acl = civicrm.create('UserAcls', **acl_dict)
+      self.assertEqual(server.acl_check("UserAcls",self.contact_id,**self.ap_dict),"0.UserAcls.3.%s" % self.ap_id)
       url = ("http://%s:%s/login" % (host,port))
       response = requests.post(url, data = {'uuid':'31415927'})
       civicrm.delete('GroupAcls', self.group_acl[0]['id'])
@@ -207,6 +222,7 @@ class TestACLs(unittest.TestCase):
         'status_id':'1'
       }
       self.group_acl = civicrm.create('GroupAcls', **acl_dict)
+      self.assertEqual(server.acl_check("GroupAcls",self.gid,**self.parent_ap_dict),"1.GroupAcls.1.%s" % self.parent_ap_id)
       url = ("http://%s:%s/login" % (host,port))
       response = requests.post(url, data = {'uuid':'31415927'})
       civicrm.delete('GroupAcls', self.group_acl[0]['id'])
@@ -223,12 +239,14 @@ class TestACLs(unittest.TestCase):
         'status_id':'1'
       }
       self.group_acl = civicrm.create('GroupAcls', **acl_dict)
+      self.assertEqual(server.acl_check("GroupAcls",self.pgid,**self.ap_dict),"1.GroupAcls.1.%s" % self.ap_id)
       url = ("http://%s:%s/login" % (host,port))
       response = requests.post(url, data = {'uuid':'31415927'})
       civicrm.delete('GroupAcls', self.group_acl[0]['id'])
       self.assertEqual(response.text,'{"access":"1"}')
       response = requests.post(url, data = {'uuid':'31415927'})
       self.assertEqual(response.text,'{"access":"0"}')
+
    @unittest.skip("not ready yet")   
    def test_user_parent_group_and_revoked_child_group_to_requested_ap(self):
       print(inspect.currentframe().f_code.co_name)
@@ -261,6 +279,7 @@ class TestACLs(unittest.TestCase):
         'status_id':'1'
       }
       self.group_acl = civicrm.create('GroupAcls', **acl_dict)
+      self.assertEqual(server.acl_check("GroupAcls",self.pgid,**self.parent_ap_dict),"1.GroupAcls.1.%s" % self.parent_ap_id)
       url = ("http://%s:%s/login" % (host,port))
       response = requests.post(url, data = {'uuid':'31415927'})
       civicrm.delete('GroupAcls', self.group_acl[0]['id'])
