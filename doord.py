@@ -8,13 +8,13 @@
 # otherwise application conncition will drop.
 # wait_timeout = 604800
 # interactive_timeout = 14400
-#
-# doord-secrets-EXAMPLE.conf provided
 
+import os
 import pythonmstk
 import configparser
 import json
 import time
+from flask import Flask, request, url_for, abort
 import urllib3.contrib.pyopenssl
 urllib3.contrib.pyopenssl.inject_into_urllib3()
 
@@ -87,6 +87,7 @@ def accept_card_uid():
          return str('{"access":"0"}')
 
       card_serial = (request.form['uuid'])
+      #print('type of card_serial is %s' % type(card_serial))
       #print(' accesspoint_id is %s and card_serial is %s' % (access_point['id'], card_serial))
       if len(card_serial) ==  10 or  8:
          access_request = doord.card_lookup(card_serial,**access_point)
