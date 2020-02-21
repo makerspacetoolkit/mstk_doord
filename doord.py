@@ -4,10 +4,6 @@
 # won't prevent anyone from entering. Using sql calls wherever
 # possible for speed.
 #
-# IMPORTANT: adjust myqsl server config to have a sizable timeout
-# otherwise application conncition will drop.
-# wait_timeout = 604800
-# interactive_timeout = 14400
 
 import os
 import pythonmstk
@@ -28,8 +24,7 @@ config.read(os.path.join(secrets_path, secrets_file))
 doord_host = config.get('doord', 'host')
 doord_port= config.get('doord', 'port')
 api_key_enabled = config.get('doord','api_key_enabled')
-
-api_key = config.get('mstk', 'api_key')
+api_key = config.get('doord', 'api_key')
 
 
 # Initialize the Flask application
@@ -95,12 +90,18 @@ def accept_card_uid():
          if access_request['member_status'] == "1" and access_request['access'] == "1":
             # make the stuff happen
             doord.ap_success(access_point['dev'],access_point['cmd'])
+         else:
+            return str('{"access":"0"}')
          today = time.strftime("%m/%d/%Y")
          currenttime  = time.strftime("%H:%M:%S")
-         doord.logsearch(today,access_request['display_name'],access_request['access'],doord.slack_channel)
-         logfile = open(doord.accesslogfile, "a");
-         logfile.write("%s,%s,%s,%s\n" % (str(today), str(currenttime), str(access_request['display_name']), access_request['access']))
-         logfile.close()
+         if access_request['display_name'] != "Unknown Card":
+            doord.logsearch(today,access_request['display_name'],access_request['access'],doord.slack_channel)
+            logfile = open(doord.accesslogfile, "a");
+            logfile.write("%s,%s,%s,%s\n" % (str(today), str(currenttime), str(access_request['display_name']), access_request['access']))
+            logfile.close()
+         else:
+            # send to private card_reader slack channel to help admin provision cards
+            pass
          return str('{"access":"%s"}' % access_request['access'])
 
       else:
@@ -115,7 +116,7 @@ def accept_card_uid():
 
 if __name__ == '__main__':
   app.run(
-        host=doord_host,
+        host=str(doord_host),
         port=int(doord_port)
   )
 
